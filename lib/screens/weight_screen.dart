@@ -105,7 +105,18 @@ class _WeightScreenState extends State<WeightScreen> {
     for (int i = 6; i >= 0; i--) {
       final date = now.subtract(Duration(days: i));
       final dateKey = DateFormat('yyyy-MM-dd').format(date);
-      final value = _healthBox.get('weight_$dateKey');
+
+      // Try to get the date-specific value first
+      var value = _healthBox.get('weight_$dateKey');
+
+      // For today, if no date-specific value exists, try to get the current value
+      if (i == 0 && value == null) {
+        final currentWeight = _healthBox.get('weight');
+        if (currentWeight != null) {
+          value = double.tryParse(currentWeight);
+        }
+      }
+
       data.add(value?.toDouble() ?? 0);
     }
 
@@ -117,7 +128,12 @@ class _WeightScreenState extends State<WeightScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Weight Tracker'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: () => _showGoalDialog(context),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -169,9 +185,40 @@ class _WeightScreenState extends State<WeightScreen> {
     );
   }
 
-  @override
-  void dispose() {
-    weightController.dispose();
-    super.dispose();
+  void _showGoalDialog(BuildContext context) {
+    final box = Hive.box('healthBox');
+    final currentGoal = box.get('weight_goal', defaultValue: 70.0);
+    final controller = TextEditingController(text: currentGoal.toString());
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Set Weight Goal'),
+        content: TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Goal (kg)',
+            suffixText: 'kg',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final newGoal = double.tryParse(controller.text);
+              if (newGoal != null) {
+                box.put('weight_goal', newGoal);
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
 }

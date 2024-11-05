@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'weight_screen.dart';
 import 'steps_screen.dart';
+import 'package:intl/intl.dart';
+import 'sleep_screen.dart';
+import 'water_screen.dart';
+import 'nutrition_screen.dart';
+import 'mood_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -90,6 +95,38 @@ class TrackersTab extends StatelessWidget {
             MaterialPageRoute(builder: (_) => const StepsScreen()),
           ),
         ),
+        _HealthCard(
+          title: 'Sleep',
+          icon: Icons.bedtime,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SleepScreen()),
+          ),
+        ),
+        _HealthCard(
+          title: 'Water',
+          icon: Icons.water_drop,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const WaterScreen()),
+          ),
+        ),
+        _HealthCard(
+          title: 'Nutrition',
+          icon: Icons.restaurant,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NutritionScreen()),
+          ),
+        ),
+        _HealthCard(
+          title: 'Mood',
+          icon: Icons.mood,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const MoodScreen()),
+          ),
+        ),
       ],
     );
   }
@@ -174,6 +211,63 @@ class _GoalCard extends StatelessWidget {
 }
 
 class _WeeklyProgressChart extends StatelessWidget {
+  List<FlSpot> _getWeightData(Box box) {
+    final now = DateTime.now();
+    final spots = <FlSpot>[];
+
+    for (int i = 6; i >= 0; i--) {
+      final date = now.subtract(Duration(days: i));
+      final dateKey = DateFormat('yyyy-MM-dd').format(date);
+
+      // Try to get the date-specific value first
+      var value = box.get('weight_$dateKey');
+
+      // For today, if no date-specific value exists, try to get the current value
+      if (i == 0 && value == null) {
+        final currentWeight = box.get('weight');
+        if (currentWeight != null) {
+          value = double.tryParse(currentWeight);
+        }
+      }
+
+      spots.add(FlSpot((6 - i).toDouble(), value?.toDouble() ?? 0));
+    }
+
+    return spots;
+  }
+
+  List<FlSpot> _getStepsData(Box box) {
+    final now = DateTime.now();
+    final spots = <FlSpot>[];
+
+    for (int i = 6; i >= 0; i--) {
+      final date = now.subtract(Duration(days: i));
+      final dateKey = DateFormat('yyyy-MM-dd').format(date);
+
+      // Try to get the date-specific value first
+      var value = box.get('steps_$dateKey');
+
+      // For today, if no date-specific value exists, try to get the current value
+      if (i == 0 && value == null) {
+        final currentSteps = box.get('steps');
+        if (currentSteps != null) {
+          value = int.tryParse(currentSteps);
+        }
+      }
+
+      spots.add(FlSpot((6 - i).toDouble(),
+          (value?.toDouble() ?? 0) / 1000)); // Convert steps to thousands
+    }
+
+    return spots;
+  }
+
+  String _getDayLabel(int index) {
+    final date = DateTime.now().subtract(Duration(days: 6 - index));
+    return DateFormat('E')
+        .format(date); // Returns abbreviated day name (Mon, Tue, etc.)
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -200,24 +294,17 @@ class _WeeklyProgressChart extends StatelessWidget {
                           sideTitles: SideTitles(
                             showTitles: true,
                             getTitlesWidget: (value, meta) {
-                              switch (value.toInt()) {
-                                case 0:
-                                  return const Text('Mon');
-                                case 1:
-                                  return const Text('Tue');
-                                case 2:
-                                  return const Text('Wed');
-                                case 3:
-                                  return const Text('Thu');
-                                case 4:
-                                  return const Text('Fri');
-                                case 5:
-                                  return const Text('Sat');
-                                case 6:
-                                  return const Text('Sun');
-                                default:
-                                  return const Text('');
+                              final index = value.toInt();
+                              if (index >= 0 && index < 7) {
+                                return Padding(
+                                  padding: const EdgeInsets.all(4.0),
+                                  child: Text(
+                                    _getDayLabel(index),
+                                    style: const TextStyle(fontSize: 10),
+                                  ),
+                                );
                               }
+                              return const Text('');
                             },
                           ),
                         ),
@@ -232,15 +319,7 @@ class _WeeklyProgressChart extends StatelessWidget {
                       lineBarsData: [
                         // Steps data
                         LineChartBarData(
-                          spots: List.generate(7, (index) {
-                            return FlSpot(
-                              index.toDouble(),
-                              (double.tryParse(box.get('steps_$index',
-                                          defaultValue: '0')) ??
-                                      0) /
-                                  1000, // Convert steps to thousands
-                            );
-                          }),
+                          spots: _getStepsData(box),
                           isCurved: true,
                           color: Theme.of(context).colorScheme.primary,
                           barWidth: 3,
@@ -248,14 +327,7 @@ class _WeeklyProgressChart extends StatelessWidget {
                         ),
                         // Weight data
                         LineChartBarData(
-                          spots: List.generate(7, (index) {
-                            return FlSpot(
-                              index.toDouble(),
-                              double.tryParse(box.get('weight_$index',
-                                      defaultValue: '0')) ??
-                                  0,
-                            );
-                          }),
+                          spots: _getWeightData(box),
                           isCurved: true,
                           color: Theme.of(context).colorScheme.secondary,
                           barWidth: 3,

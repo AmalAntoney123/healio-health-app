@@ -106,8 +106,19 @@ class _StepsScreenState extends State<StepsScreen> {
     for (int i = 6; i >= 0; i--) {
       final date = now.subtract(Duration(days: i));
       final dateKey = DateFormat('yyyy-MM-dd').format(date);
-      final value = _healthBox.get('steps_$dateKey');
-      data.add(value?.toInt() ?? 0);
+
+      // Try to get the date-specific value first
+      var value = _healthBox.get('steps_$dateKey');
+
+      // For today, if no date-specific value exists, try to get the current value
+      if (i == 0 && value == null) {
+        final currentSteps = _healthBox.get('steps');
+        if (currentSteps != null) {
+          value = int.tryParse(currentSteps);
+        }
+      }
+
+      data.add(value ?? 0);
     }
 
     return data;
@@ -117,8 +128,13 @@ class _StepsScreenState extends State<StepsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Steps Counter'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: const Text('Steps Tracker'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: () => _showGoalDialog(context),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -175,9 +191,40 @@ class _StepsScreenState extends State<StepsScreen> {
     );
   }
 
-  @override
-  void dispose() {
-    stepsController.dispose();
-    super.dispose();
+  void _showGoalDialog(BuildContext context) {
+    final box = Hive.box('healthBox');
+    final currentGoal = box.get('steps_goal', defaultValue: 10000);
+    final controller = TextEditingController(text: currentGoal.toString());
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Set Steps Goal'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Goal (steps)',
+            suffixText: 'steps',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final newGoal = int.tryParse(controller.text);
+              if (newGoal != null) {
+                box.put('steps_goal', newGoal);
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
 }
