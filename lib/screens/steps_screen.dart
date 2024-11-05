@@ -124,6 +124,34 @@ class _StepsScreenState extends State<StepsScreen> {
     return data;
   }
 
+  Color _getProgressColor(int steps, int goal) {
+    if (goal == 0) return Colors.grey;
+    final percentage = steps / goal;
+    if (percentage >= 1) {
+      return Colors.green;
+    } else if (percentage >= 0.7) {
+      return Colors.blue;
+    } else if (percentage >= 0.4) {
+      return Colors.orange;
+    } else {
+      return Colors.red;
+    }
+  }
+
+  String _getProgressMessage(int steps, int goal) {
+    if (goal == 0) return 'No goal set';
+    final percentage = steps / goal;
+    if (percentage >= 1) {
+      return 'Goal achieved!';
+    } else if (percentage >= 0.7) {
+      return 'Almost there!';
+    } else if (percentage >= 0.4) {
+      return 'Making progress';
+    } else {
+      return 'Keep moving';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -140,48 +168,169 @@ class _StepsScreenState extends State<StepsScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            TextField(
-              controller: stepsController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Daily Steps',
-                border: OutlineInputBorder(),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Daily Steps',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: stepsController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Steps',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ValueListenableBuilder(
+                      valueListenable: _healthBox.listenable(),
+                      builder: (context, box, _) {
+                        final hasData = box.get('steps', defaultValue: null) != null;
+                        return ElevatedButton(
+                          onPressed: _saveSteps,
+                          child: Text(hasData ? 'Update Steps' : 'Save Steps'),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Steps History',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildStepsChart(),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Daily Progress',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    ValueListenableBuilder(
+                      valueListenable: _healthBox.listenable(),
+                      builder: (context, box, _) {
+                        final stepsData = _getLast7DaysData();
+                        final goal = box.get('steps_goal', defaultValue: 10000);
+
+                        if (stepsData.every((steps) => steps == 0)) {
+                          return const Center(
+                            child: Text('No steps data recorded yet'),
+                          );
+                        }
+
+                        return ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: stepsData.length,
+                          separatorBuilder: (context, index) => const Divider(),
+                          itemBuilder: (context, index) {
+                            final date = DateTime.now().subtract(
+                              Duration(days: stepsData.length - 1 - index),
+                            );
+                            final steps = stepsData[index];
+                            
+                            return ListTile(
+                              leading: Icon(
+                                Icons.directions_walk,
+                                color: _getProgressColor(steps, goal),
+                                size: 28,
+                              ),
+                              title: Text(
+                                DateFormat('EEEE, MMM dd').format(date),
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                              subtitle: Text(
+                                _getProgressMessage(steps, goal),
+                                style: TextStyle(
+                                  color: _getProgressColor(steps, goal),
+                                ),
+                              ),
+                              trailing: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: steps == 0 
+                                    ? Colors.grey 
+                                    : _getProgressColor(steps, goal),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Text(
+                                  steps == 0 ? 'No data' : '$steps steps',
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
             ValueListenableBuilder(
               valueListenable: _healthBox.listenable(),
               builder: (context, box, _) {
-                final hasData = box.get('steps', defaultValue: null) != null;
-                return Column(
-                  children: [
-                    ElevatedButton(
-                      onPressed: _saveSteps,
-                      child: Text(hasData ? 'Edit Steps' : 'Save Steps'),
-                    ),
-                    const SizedBox(height: 24),
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Steps History',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 16),
-                            _buildStepsChart(),
-                          ],
+                final currentSteps = box.get('steps', defaultValue: 'No data');
+                final goal = box.get('steps_goal', defaultValue: 10000);
+                return Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Today\'s Progress',
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
-                      ),
+                        const SizedBox(height: 16),
+                        Text(
+                          '$currentSteps / $goal steps',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        if (currentSteps != 'No data')
+                          Text(
+                            _getProgressMessage(
+                              int.tryParse(currentSteps) ?? 0, 
+                              goal,
+                            ),
+                            style: TextStyle(
+                              color: _getProgressColor(
+                                int.tryParse(currentSteps) ?? 0, 
+                                goal,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Today\'s Steps: ${box.get('steps', defaultValue: 'No data')}',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ],
+                  ),
                 );
               },
             ),

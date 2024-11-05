@@ -123,6 +123,44 @@ class _WeightScreenState extends State<WeightScreen> {
     return data;
   }
 
+  Color _getWeightProgressColor(double weight, double goal) {
+    if (goal == 0) return Colors.grey;
+    final difference = (weight - goal).abs();
+    final percentDifference = difference / goal * 100;
+
+    if (percentDifference <= 1) {
+      return Colors.green; // Within 1% of goal
+    } else if (percentDifference <= 5) {
+      return Colors.blue; // Within 5% of goal
+    } else if (percentDifference <= 10) {
+      return Colors.orange; // Within 10% of goal
+    } else {
+      return Colors.red; // More than 10% from goal
+    }
+  }
+
+  String _getWeightProgressMessage(double weight, double goal) {
+    if (goal == 0) return 'No goal set';
+    final difference = weight - goal;
+    final percentDifference = (difference / goal * 100).abs();
+
+    if (percentDifference <= 1) {
+      return 'At goal weight!';
+    } else if (percentDifference <= 5) {
+      return difference > 0
+          ? 'Close to goal (${difference.toStringAsFixed(1)} kg over)'
+          : 'Close to goal (${(-difference).toStringAsFixed(1)} kg under)';
+    } else if (percentDifference <= 10) {
+      return difference > 0
+          ? 'Making progress (${difference.toStringAsFixed(1)} kg over)'
+          : 'Making progress (${(-difference).toStringAsFixed(1)} kg under)';
+    } else {
+      return difference > 0
+          ? '${difference.toStringAsFixed(1)} kg over goal'
+          : '${(-difference).toStringAsFixed(1)} kg under goal';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -139,18 +177,33 @@ class _WeightScreenState extends State<WeightScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            TextField(
-              controller: weightController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Weight (kg)',
-                border: OutlineInputBorder(),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Current Weight',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: weightController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Weight (kg)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: _saveWeight,
+                      child: const Text('Save Weight'),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _saveWeight,
-              child: const Text('Save Weight'),
             ),
             const SizedBox(height: 24),
             Card(
@@ -170,12 +223,130 @@ class _WeightScreenState extends State<WeightScreen> {
               ),
             ),
             const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Daily Records',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    ValueListenableBuilder(
+                      valueListenable: _healthBox.listenable(),
+                      builder: (context, box, _) {
+                        final weightData = _getLast7DaysData();
+                        final goal = box.get('weight_goal', defaultValue: 70.0);
+
+                        if (weightData.every((weight) => weight == 0)) {
+                          return const Center(
+                            child: Text('No weight data recorded yet'),
+                          );
+                        }
+
+                        return ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: weightData.length,
+                          separatorBuilder: (context, index) => const Divider(),
+                          itemBuilder: (context, index) {
+                            final date = DateTime.now().subtract(
+                              Duration(days: weightData.length - 1 - index),
+                            );
+                            final weight = weightData[index];
+
+                            if (weight == 0) {
+                              return ListTile(
+                                title: Text(
+                                  DateFormat('EEEE, MMM dd').format(date),
+                                  style: Theme.of(context).textTheme.bodyLarge,
+                                ),
+                                trailing: const Text('No data'),
+                              );
+                            }
+
+                            return ListTile(
+                              leading: Icon(
+                                Icons.monitor_weight,
+                                color: _getWeightProgressColor(weight, goal),
+                                size: 28,
+                              ),
+                              title: Text(
+                                DateFormat('EEEE, MMM dd').format(date),
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                              subtitle: Text(
+                                _getWeightProgressMessage(weight, goal),
+                                style: TextStyle(
+                                  color: _getWeightProgressColor(weight, goal),
+                                ),
+                              ),
+                              trailing: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _getWeightProgressColor(weight, goal),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Text(
+                                  '${weight.toStringAsFixed(1)} kg',
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             ValueListenableBuilder(
               valueListenable: _healthBox.listenable(),
               builder: (context, box, _) {
-                return Text(
-                  'Current Weight: ${box.get('weight', defaultValue: 'No data')} kg',
-                  style: Theme.of(context).textTheme.titleLarge,
+                final currentWeight =
+                    box.get('weight', defaultValue: 'No data');
+                final goal = box.get('weight_goal', defaultValue: 70.0);
+                return Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Progress Summary',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Current: $currentWeight kg',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        Text(
+                          'Goal: $goal kg',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        if (currentWeight != 'No data')
+                          Text(
+                            _getWeightProgressMessage(
+                              double.tryParse(currentWeight) ?? 0,
+                              goal,
+                            ),
+                            style: TextStyle(
+                              color: _getWeightProgressColor(
+                                double.tryParse(currentWeight) ?? 0,
+                                goal,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 );
               },
             ),
